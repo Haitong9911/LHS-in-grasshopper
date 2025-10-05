@@ -1,0 +1,76 @@
+import os, csv
+import ghpythonlib.treehelpers as th
+import scriptcontext as sc
+
+def sanitize_path(p):
+    """清理文件路径"""
+    if p is None:
+        return ""
+    s = str(p).replace("\r", "").replace("\n", "").strip().strip('"').strip("'")
+    return os.path.normpath(s)
+
+def flatten_strict(x):
+    """把嵌套 list/tuple 压平成一维列表"""
+    if isinstance(x, (list, tuple)):
+        flat = []
+        for i in x:
+            flat.extend(flatten_strict(i))
+        return flat
+    else:
+        return [x]
+
+# -------- 主逻辑 --------
+Path = None
+Row_out = []
+
+if Run and File:
+    # ⚠️ battery1 已完成时不再写入
+    if sc.sticky.get("lhs_done", False):
+        Path = None
+        Row_out = []
+    else:
+        base = sanitize_path(File)
+
+        if base:
+            # 生成 CSV 路径
+            if base.lower().endswith(".csv"):
+                csv_path = base
+                folder = os.path.dirname(csv_path)
+            else:
+                folder = base
+                csv_path = os.path.join(folder, "LHS_output.csv")
+
+            if folder and not os.path.exists(folder):
+                os.makedirs(folder)
+
+            # 🟢 转换 DataTree 为 list
+            try:
+                Row_py = th.tree_to_list(Row)
+            except:
+                Row_py = Row
+
+            Row_out = flatten_strict(Row_py)
+
+            # 🧠 使用 sticky 保存样本编号
+            if "sample_id" not in sc.sticky:
+                sc.sticky["sample_id"] = 1
+            else:
+                sc.sticky["sample_id"] += 1
+            sample_id = sc.sticky["sample_id"]
+
+            # 📝 写入 CSV
+            write_header = not os.path.exists(csv_path)
+            with open(csv_path, "a", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                if write_header:
+                    header = ["Sample"] + ["Col{}".format(i + 1) for i in range(len(Row_out))]
+                    w.writerow(header)
+                w.writerow([sample_id] + Row_out)
+
+            Path = csv_path
+else:
+    Path = None
+
+# 输出
+Path = Path
+Row = Row_out
