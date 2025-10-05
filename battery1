@@ -1,0 +1,135 @@
+import random
+import scriptcontext as sc
+from itertools import product
+
+def lhs_unit(n, d):
+    """生成 n 个 d 维的标准 LHS 样本"""
+    cut = [[(i + random.random()) / n for i in range(n)] for _ in range(d)]
+    for arr in cut:
+        random.shuffle(arr)
+    return list(zip(*cut))
+
+def _as_list(v):
+    try:
+        iter(v)
+        if isinstance(v, (str, bytes)):
+            return [v]
+        return list(v)
+    except:
+        return [v]
+
+# 默认输出
+Current = []
+Xs = []
+
+# 处理 N
+try:
+    N = int(N)
+except:
+    N = 0
+
+# 唯一缓存 key
+key = "lhs_samples_" + str(ghenv.Component.InstanceGuid)
+
+# ---------------------
+# Run = 初始化
+# ---------------------
+if Run and N > 0:
+    # 收集所有输入变量值
+    inputs = ghenv.Component.Params.Input
+    var_lists = []
+    for i in range(3, inputs.Count):  # 跳过 Run, Auto, N
+        vals = locals().get(inputs[i].NickName, None)
+        vals = [float(x) for x in _as_list(vals)]
+        var_lists.append(vals)
+
+    d = len(var_lists)
+
+    if d > 0:
+        # 初始化样本缓存
+        if key not in sc.sticky or sc.sticky[key].get("N", None) != N:
+            # Step 1: 构造全集组合
+            full_combo = list(product(*var_lists))
+
+            # Step 2: LHS 抽样
+            S = lhs_unit(N, d)
+
+            # Step 3: 将 LHS 点映射为多维索引
+            index_list = []
+            for s in S:
+                idx = []
+                for j, val in enumerate(s):
+                    count = len(var_lists[j])
+                    i = int(val * count)
+                    i = min(i, count - 1)
+                    idx.append(i)
+                index_list.append(tuple(idx))
+
+            # Step 4: 多维索引 → 一维组合索引（支持任意维度）
+            shape = [len(v) for v in var_lists]
+            def flat_index(idx, shape):
+                index = 0
+                for i in range(len(idx)):
+                    stride = 1
+                    for s in shape[i+1:]:
+                        stride *= s
+                    index += idx[i] * stride
+                return index
+
+            samples = []
+            used = set()
+            for idx in index_list:
+                index = flat_index(idx, shape)
+                index = min(index, len(full_combo) - 1)
+                if index not in used:
+                    used.add(index)
+                    samples.append(full_combo[index])
+
+            sc.sticky[key] = {"samples": samples, "step": 0, "N": N, "done": False}
+
+        # 输出当前一步
+        cache = sc.sticky[key]
+        step = cache["step"]
+        samples = cache["samples"]
+
+        if not cache.get("done", False):
+            if step < len(samples):
+                Current = samples[step]
+                Xs = Current
+                cache["step"] += 1
+
+                if cache["step"] >= len(samples):
+                    cache["done"] = True
+                    sc.sticky["lhs_done"] = True
+
+            if Auto and not cache["done"]:
+                ghdoc = ghenv.Component.OnPingDocument()
+                ghdoc.ScheduleSolution(1, lambda doc: ghenv.Component.ExpireSolution(True))
+        else:
+            Current = []
+            Xs = []
+
+# ---------------------
+# Run = False 时清空缓存
+# ---------------------
+else:
+    if key in sc.sticky:
+        del sc.sticky[key]
+    sc.sticky["lhs_done"] = False
+    Current = []
+    Xs = []
+
+# ---------------------
+# 输出数据
+# ---------------------
+Import = Current
+if len(Xs) >= 1: X1 = Xs[0]
+if len(Xs) >= 2: X2 = Xs[1]
+if len(Xs) >= 3: X3 = Xs[2]
+if len(Xs) >= 4: X4 = Xs[3]
+if len(Xs) >= 5: X5 = Xs[4]
+if len(Xs) >= 6: X6 = Xs[5]
+if len(Xs) >= 7: X7 = Xs[6]
+if len(Xs) >= 8: X8 = Xs[7]
+if len(Xs) >= 9: X9 = Xs[8]
+if len(Xs) >= 10: X10 = Xs[9]
