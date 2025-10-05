@@ -1,15 +1,26 @@
+"""
+This GHPython component generates Latin Hypercube Sampling (LHS) from multiple input parameter lists.
+It supports any number of input variables (X1~X10 or more). 
+The component:
+- Builds the full Cartesian product of all input parameter lists.
+- Uses LHS to select N representative combinations from the full set.
+- Outputs one row at a time automatically, or all at once if desired.
+- Guarantees no duplicates and all combinations come from the original inputs.
+"""
+
 import random
 import scriptcontext as sc
 from itertools import product
 
 def lhs_unit(n, d):
-    """生成 n 个 d 维的标准 LHS 样本"""
+    """Generate n samples in d-dimensions using standard LHS."""
     cut = [[(i + random.random()) / n for i in range(n)] for _ in range(d)]
     for arr in cut:
         random.shuffle(arr)
     return list(zip(*cut))
 
 def _as_list(v):
+    """Ensure the input is converted to a list."""
     try:
         iter(v)
         if isinstance(v, (str, bytes)):
@@ -18,27 +29,27 @@ def _as_list(v):
     except:
         return [v]
 
-# 默认输出
+# Default outputs
 Current = []
 Xs = []
 
-# 处理 N
+# Parse N
 try:
     N = int(N)
 except:
     N = 0
 
-# 唯一缓存 key
+# Unique key for sticky storage
 key = "lhs_samples_" + str(ghenv.Component.InstanceGuid)
 
 # ---------------------
-# Run = 初始化
+# Run = initialization
 # ---------------------
 if Run and N > 0:
-    # 收集所有输入变量值
+    # Collect all input variable lists (skip Run, Auto, N)
     inputs = ghenv.Component.Params.Input
     var_lists = []
-    for i in range(3, inputs.Count):  # 跳过 Run, Auto, N
+    for i in range(3, inputs.Count):
         vals = locals().get(inputs[i].NickName, None)
         vals = [float(x) for x in _as_list(vals)]
         var_lists.append(vals)
@@ -46,15 +57,15 @@ if Run and N > 0:
     d = len(var_lists)
 
     if d > 0:
-        # 初始化样本缓存
+        # Initialize samples cache if new N or first run
         if key not in sc.sticky or sc.sticky[key].get("N", None) != N:
-            # Step 1: 构造全集组合
+            # Step 1: Build full Cartesian product of input values
             full_combo = list(product(*var_lists))
 
-            # Step 2: LHS 抽样
+            # Step 2: Generate LHS sample points
             S = lhs_unit(N, d)
 
-            # Step 3: 将 LHS 点映射为多维索引
+            # Step 3: Map LHS points to discrete indices for each dimension
             index_list = []
             for s in S:
                 idx = []
@@ -65,7 +76,7 @@ if Run and N > 0:
                     idx.append(i)
                 index_list.append(tuple(idx))
 
-            # Step 4: 多维索引 → 一维组合索引（支持任意维度）
+            # Step 4: Convert multi-dimensional indices to flat index (supports any dimension)
             shape = [len(v) for v in var_lists]
             def flat_index(idx, shape):
                 index = 0
@@ -87,7 +98,7 @@ if Run and N > 0:
 
             sc.sticky[key] = {"samples": samples, "step": 0, "N": N, "done": False}
 
-        # 输出当前一步
+        # Output current step
         cache = sc.sticky[key]
         step = cache["step"]
         samples = cache["samples"]
@@ -102,15 +113,17 @@ if Run and N > 0:
                     cache["done"] = True
                     sc.sticky["lhs_done"] = True
 
+            # Schedule next iteration automatically if Auto = True
             if Auto and not cache["done"]:
                 ghdoc = ghenv.Component.OnPingDocument()
                 ghdoc.ScheduleSolution(1, lambda doc: ghenv.Component.ExpireSolution(True))
         else:
+            # Done: clear outputs
             Current = []
             Xs = []
 
 # ---------------------
-# Run = False 时清空缓存
+# Reset cache when Run = False
 # ---------------------
 else:
     if key in sc.sticky:
@@ -120,7 +133,7 @@ else:
     Xs = []
 
 # ---------------------
-# 输出数据
+# Outputs
 # ---------------------
 Import = Current
 if len(Xs) >= 1: X1 = Xs[0]
@@ -133,3 +146,4 @@ if len(Xs) >= 7: X7 = Xs[6]
 if len(Xs) >= 8: X8 = Xs[7]
 if len(Xs) >= 9: X9 = Xs[8]
 if len(Xs) >= 10: X10 = Xs[9]
+
