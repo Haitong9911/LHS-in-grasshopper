@@ -1,16 +1,25 @@
+"""
+This GHPython component appends each LHS sample (row) to a CSV file during iteration.
+- Accepts a base folder or a full CSV file path.
+- Converts incoming data (including DataTree) into a flat row.
+- Automatically generates sample IDs.
+- Writes a header on the first run, appends data in subsequent runs.
+- Uses sticky context to track sample count and avoid writing after completion.
+"""
+
 import os, csv
 import ghpythonlib.treehelpers as th
 import scriptcontext as sc
 
 def sanitize_path(p):
-    """清理文件路径"""
+    """Clean up a file/folder path string."""
     if p is None:
         return ""
     s = str(p).replace("\r", "").replace("\n", "").strip().strip('"').strip("'")
     return os.path.normpath(s)
 
 def flatten_strict(x):
-    """把嵌套 list/tuple 压平成一维列表"""
+    """Flatten nested lists/tuples into a flat list."""
     if isinstance(x, (list, tuple)):
         flat = []
         for i in x:
@@ -19,12 +28,12 @@ def flatten_strict(x):
     else:
         return [x]
 
-# -------- 主逻辑 --------
+# -------- Main Logic --------
 Path = None
 Row_out = []
 
 if Run and File:
-    # ⚠️ battery1 已完成时不再写入
+    # Do not write if upstream component has completed sampling
     if sc.sticky.get("lhs_done", False):
         Path = None
         Row_out = []
@@ -32,7 +41,7 @@ if Run and File:
         base = sanitize_path(File)
 
         if base:
-            # 生成 CSV 路径
+            # Determine CSV file path
             if base.lower().endswith(".csv"):
                 csv_path = base
                 folder = os.path.dirname(csv_path)
@@ -43,7 +52,7 @@ if Run and File:
             if folder and not os.path.exists(folder):
                 os.makedirs(folder)
 
-            # 🟢 转换 DataTree 为 list
+            # Convert DataTree or input to flat list
             try:
                 Row_py = th.tree_to_list(Row)
             except:
@@ -51,14 +60,14 @@ if Run and File:
 
             Row_out = flatten_strict(Row_py)
 
-            # 🧠 使用 sticky 保存样本编号
+            # Maintain sample ID using sticky storage
             if "sample_id" not in sc.sticky:
                 sc.sticky["sample_id"] = 1
             else:
                 sc.sticky["sample_id"] += 1
             sample_id = sc.sticky["sample_id"]
 
-            # 📝 写入 CSV
+            # Append data to CSV file
             write_header = not os.path.exists(csv_path)
             with open(csv_path, "a", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
@@ -71,6 +80,6 @@ if Run and File:
 else:
     Path = None
 
-# 输出
+# Outputs
 Path = Path
 Row = Row_out
